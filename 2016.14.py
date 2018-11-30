@@ -1,60 +1,61 @@
 import hashlib
 
-
-index = 0
-salt = 'abc'
-keys = []
-all_hashes = []
+def custom_hash(text, super_hash=False):
+    hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+    if super_hash:
+        for _ in range(2016):
+            hash = hashlib.md5(hash.encode('utf-8')).hexdigest()
+    return hash
 
 def check_muliples(hash, amount):
     for i in range(len(hash) - (amount-1)):
-        if (
-            amount==3 and (hash[i] == hash[i+1] == hash[i+2])
-        ) or (
-            amount == 5 and (hash[i] == hash[i+1] == hash[i+2] == hash[i+3] == hash[i+4])
-        ):
-            not_at_end = i+amount < len(hash)
-            if not_at_end:
-                if hash[i] != hash[i+amount]:
-                    return (True, hash[i])
-            else:
+        block = hash[i:i+amount]
+        if block.count(block[0]) == len(block):
+            if i + amount == len(hash): # Reached final block of numbers
+                return (True, hash[i])
+            if hash[i] != hash[i+amount]:
                 return (True, hash[i])
     return (False, None)
 
-while True:
-    text = salt + str(index)
-    hash = hashlib.md5(text.encode('utf-8')).hexdigest()
-    all_hashes.append(hash)
-    (has_triples, t_char) = check_muliples(hash, 3)
-    if has_triples:
-        keys.append({
-            't_hash': hash,
-            't_index': index,
-            'q_hash': None,
-            'q_index': None,
-            'char': t_char,
-            'valid': False,
-        })
+def valid_quint(key, char, index):
+    return (
+        key['char'] == char
+        and index > key['index'] >= index - 1000
+        and key['valid'] == False
+    )
 
-    (has_quadruples, q_char) = check_muliples(hash, 5)
-    if has_quadruples:
-        for key in keys:
-            if key['char'] == q_char and key['t_index'] >= index - 1000 and key['valid'] == False and key['t_index'] != index:
-                key['q_index'] = index
-                key['q_hash'] = hash
-                key['valid'] = True
+def find_answer(salt, super_hash):
+    index = 0
+    keys = []
+    valid_keys = []
+    while True:
+        text = salt + str(index)
+        hash = custom_hash(text, super_hash=super_hash)
 
+        # Check if hash meets initial triple character requirement
+        (has_triples, t_char) = check_muliples(hash, 3)
+        if has_triples:
+            keys.append({
+                'index': index,
+                'char': t_char,
+                'valid': False,
+            })
 
-    index += 1
-    if index % 1000 == 0:
-        working_keys = [key for key in keys if key['valid'] == True]
-        if len(working_keys) >= 64:
-            for (index, key) in enumerate(working_keys[:64]):
-                print("{t_index}: {t_hash}; {q_index}: {q_hash}; Char: {char}".format(
-                    t_index=key['t_index'],
-                    t_hash=key['t_hash'],
-                    q_index=key['q_index'],
-                    q_hash=key['q_hash'],
-                    char=key['char']
-                ))
-            break
+        # Check if hash meets the quintuple requirement of previous hash
+        (has_quintuples, q_char) = check_muliples(hash, 5)
+        if has_quintuples:
+            for key in keys:
+                if valid_quint(key, q_char, index):
+                    key['valid'] = True
+                    valid_keys.append(key)
+
+        # Check if we've reached the desired number
+        if len(valid_keys) >= 64:
+            return(valid_keys[63]['index'])
+
+        index += 1
+
+if __name__ == '__main__':
+    salt = input('Enter salt: ')
+    print("Part One Answer: {}".format(find_answer(salt, False)))
+    print("Part One Answer: {}".format(find_answer(salt, True)))
